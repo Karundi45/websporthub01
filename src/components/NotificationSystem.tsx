@@ -18,7 +18,9 @@ function urlBase64ToUint8Array(base64String: string) {
 export function NotificationSystem() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pushSupported, setPushSupported] = useState(false);
-  const [pushPermission, setPushPermission] = useState(Notification.permission);
+  const [pushPermission, setPushPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
 
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
