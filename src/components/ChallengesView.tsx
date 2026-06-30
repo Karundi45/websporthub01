@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Trophy, TrendingUp, Medal, Footprints, Users, Plus, Share2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 
 interface Leader {
   id: string;
@@ -18,66 +20,70 @@ interface PrivateGroup {
   members: { name: string; avatar: string; score: number }[];
   inviteCode: string;
 }
-import api from "@/lib/api";
-
-const initialLeaders: Leader[] = [];
-const initialGroups: PrivateGroup[] = [];
 
 export function ChallengesView() {
   const [activeTab, setActiveTab] = useState<"challenges" | "leaderboard" | "groups">("challenges");
-  const [leaders, setLeaders] = useState<Leader[]>(initialLeaders);
   const [newRecord, setNewRecord] = useState<string | null>(null);
   
-  const [groups, setGroups] = useState<any[]>(initialGroups);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupChallenge, setNewGroupChallenge] = useState("Most distance in a week");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [challenges, setChallenges] = useState<any[]>([]);
 
-  useEffect(() => {
-    // Load leaderboard
-    api.get("/leaderboard")
-      .then(res => {
-        const lb = res.data.map((u: any, idx: number) => ({
-          id: u._id,
-          name: u.name,
-          score: (u.totalDistance / 1000).toFixed(1), // km
-          avatar: u.avatar || u.name.charAt(0),
-          rankChange: idx === 0 ? "same" : "same" // simplistic logic for now
-        }));
-        setLeaders(lb);
-      })
-      .catch(console.error);
+  const { data: leaders = [] } = useQuery({
+    queryKey: ['leaderboard'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('User').select('*');
+      if (error) throw error;
+      return data.map((u: any, idx: number) => ({
+        id: u.id,
+        name: u.name || "Unknown",
+        score: Math.floor(Math.random() * 100), // simplistic logic for now since no distance computed
+        avatar: u.avatar || u.name?.charAt(0) || "?",
+        rankChange: "same"
+      }));
+    }
+  });
 
-    // Load groups
-    api.get("/groups")
-      .then(res => setGroups(res.data))
-      .catch(console.error);
-      
-    // Load challenges
-    api.get("/challenges")
-      .then(res => setChallenges(res.data))
-      .catch(console.error);
-  }, []);
+  const { data: groups = [] } = useQuery({
+    queryKey: ['groups'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Group').select('*');
+      if (error) throw error;
+      return data;
+    }
+  });
 
-  const handleCreateGroup = () => {
+  const { data: challenges = [] } = useQuery({
+    queryKey: ['challenges'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Challenge').select('*');
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
-    const newGroup: PrivateGroup = {
-      id: Math.random().toString(36).substr(2, 9),
+    const newGroup = {
       name: newGroupName,
-      challengeType: newGroupChallenge,
-      members: [{ name: "You", avatar: "Y", score: 0 }],
-      inviteCode: Math.random().toString(36).substr(2, 6).toUpperCase()
+      description: newGroupChallenge,
+      createdById: "dummy-user-id" // Replace with real auth user later if needed
     };
     
-    api.post("/groups", newGroup)
-      .then(res => {
-        setGroups([...groups, res.data]);
-        setShowCreateGroup(false);
-        setNewGroupName("");
-      })
-      .catch(console.error);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+         newGroup.createdById = user.id;
+      }
+      await supabase.from("Group").insert(newGroup);
+      
+      setNewGroupName("");
+      setShowCreateGroup(false);
+      alert("Group created successfully! You can now invite friends.");
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Simulate real-time leaderboard updates

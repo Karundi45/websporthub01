@@ -2,18 +2,9 @@ import { useState, useEffect } from "react";
 import { Search, Play, Clock, Flame, Calendar as CalendarIcon, ChevronLeft, ChevronRight, CheckCircle2, Navigation, Activity as ActivityIcon, BarChart3, TrendingUp, Dumbbell, Timer, Milestone, Heart, Bluetooth, AlertOctagon, Sparkles, Wifi, Thermometer, Droplets, CloudRain, MapPin, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import api from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 import { io } from "socket.io-client";
-
-const DEFAULT_ACTIVITY_DATA = [
-  { day: 'Mon', calories: 340, distance: 4.2, minutes: 30, workouts: 1, intensity: 125 },
-  { day: 'Tue', calories: 420, distance: 5.1, minutes: 45, workouts: 2, intensity: 135 },
-  { day: 'Wed', calories: 310, distance: 3.8, minutes: 25, workouts: 1, intensity: 110 },
-  { day: 'Thu', calories: 550, distance: 6.8, minutes: 60, workouts: 1, intensity: 155 },
-  { day: 'Fri', calories: 290, distance: 3.2, minutes: 20, workouts: 0, intensity: 105 },
-  { day: 'Sat', calories: 600, distance: 8.5, minutes: 75, workouts: 3, intensity: 160 },
-  { day: 'Sun', calories: 480, distance: 5.9, minutes: 50, workouts: 2, intensity: 145 },
-];
 
 const DEFAULT_PERSONAL_BESTS: any[] = [
   { id: 'pb-1', name: 'Bench Press', value: 225, unit: 'lbs', trend: '+5 lbs this month', trendValue: 'up', iconType: 'dumbbell' },
@@ -25,49 +16,58 @@ export function DashboardView() {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 19)); // Given June 2026
   const [selectedDate, setSelectedDate] = useState(new Date(2026, 5, 19));
   const [selectedMetric, setSelectedMetric] = useState<"calories" | "distance" | "minutes" | "workouts">("calories");
-  const [isLoading, setIsLoading] = useState(true);
-  const [activityData, setActivityData] = useState<any[]>([]);
-  const [personalBests, setPersonalBests] = useState<any[]>([]);
+  
+  const { data: user } = useQuery({
+    queryKey: ["user"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+  });
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const res = await api.get('/user/analytics');
-        // Transform workouts to activityData for the charts
-        const dayMap: Record<string, any> = {
-          'Mon': { day: 'Mon', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Tue': { day: 'Tue', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Wed': { day: 'Wed', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Thu': { day: 'Thu', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Fri': { day: 'Fri', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Sat': { day: 'Sat', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-          'Sun': { day: 'Sun', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-        };
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
-        res.data.workouts.forEach((w: any) => {
-          const dName = dayNames[new Date(w.startTime).getDay()];
-          dayMap[dName].distance += (w.distance / 1000); // convert meters to km
-          dayMap[dName].minutes += (w.duration / 60);
-          dayMap[dName].calories += (w.distance / 1000) * 70; // 70 kcal per km estimate
-          dayMap[dName].workouts += 1;
-          dayMap[dName].intensity = 130 + Math.floor(Math.random() * 20); // random intensity for chart
-        });
-        
-        setActivityData(Object.values(dayMap));
-        // Hardcoded generic personal bests for now until backend supports PBs
-        setPersonalBests([
-          { id: 'pb-1', name: 'Total Distance', value: (res.data.totalDistance / 1000).toFixed(1), unit: 'km', trend: 'Lifetime tracking', trendValue: 'up', iconType: 'activity' },
-          { id: 'pb-2', name: 'Workouts', value: res.data.totalWorkouts, unit: 'sessions', trend: 'Lifetime tracking', trendValue: 'up', iconType: 'timer' }
-        ]);
-      } catch (err) {
-        console.error("Error loading analytics data:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-  }, []);
+  const { data: workouts = [], isLoading } = useQuery({
+    queryKey: ['workouts', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('Workout')
+        .select('*')
+        .eq('userId', user.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id
+  });
+
+  const { data: activityData, totalDistance } = (() => {
+    const dayMap: Record<string, any> = {
+      'Mon': { day: 'Mon', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Tue': { day: 'Tue', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Wed': { day: 'Wed', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Thu': { day: 'Thu', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Fri': { day: 'Fri', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Sat': { day: 'Sat', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Sun': { day: 'Sun', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+    };
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    let totalDistance = 0;
+    workouts.forEach((w: any) => {
+      const dName = dayNames[new Date(w.startTime).getDay()];
+      dayMap[dName].distance += (w.distance / 1000) || 0; // convert meters to km
+      dayMap[dName].minutes += (w.duration / 60) || 0;
+      dayMap[dName].calories += ((w.distance / 1000) * 70) || 0; // 70 kcal per km estimate
+      dayMap[dName].workouts += 1;
+      dayMap[dName].intensity = 130 + Math.floor(Math.random() * 20); // random intensity for chart
+      totalDistance += (w.distance / 1000) || 0;
+    });
+    return { data: Object.values(dayMap), totalDistance };
+  })();
+
+  const personalBests = [
+    { id: 'pb-1', name: 'Total Distance', value: totalDistance.toFixed(1), unit: 'km', trend: 'Lifetime tracking', trendValue: 'up', iconType: 'activity' },
+    ...DEFAULT_PERSONAL_BESTS
+  ];
 
   // Weather State
   const [weather, setWeather] = useState<{temp: number, humidity: number, precip: number} | null>(null);

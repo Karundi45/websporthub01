@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, X, Calendar, Activity, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import api from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 // Utility to convert VAPID key
 function urlBase64ToUint8Array(base64String: string) {
@@ -59,74 +59,26 @@ export function NotificationSystem() {
   };
 
   useEffect(() => {
-    // Check if user has notifications enabled
-    const profileDataStr = localStorage.getItem('social_profile_data');
-    let notificationsEnabled = true;
-    if (profileDataStr) {
-      try {
-        const data = JSON.parse(profileDataStr);
-        notificationsEnabled = data.notifications !== false;
-      } catch (e) {}
-    }
+    // Listen to new activities from others
+    const activitySub = supabase.channel('public:Activity:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Activity' }, (payload) => {
+        const title = "New Activity!";
+        const message = `A new workout was just posted.`;
+        
+        const newNotification = {
+          id: Date.now(),
+          title,
+          message,
+          icon: <Activity className="w-5 h-5 text-[#21D4B5]" />,
+          time: "Just now"
+        };
+        setNotifications(prev => [newNotification, ...prev]);
+      })
+      .subscribe();
 
-    if (!notificationsEnabled) return;
-
-    // Simulate scheduling a notification for an upcoming workout based on weekly goals
-    // We'll show one shortly after the app loads to demonstrate the feature
-    const timers: ReturnType<typeof setTimeout>[] = [];
-
-    const sendEmailNotification = async (title: string, message: string) => {
-      try {
-        await fetch('/api/notifications/email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            to: 'karundi2004@gmail.com', // Using user email provided in context
-            subject: title,
-            html: `<p><strong>${title}</strong></p><p>${message}</p>`,
-          }),
-        });
-      } catch (e) {
-        console.error('Failed to send email:', e);
-      }
+    return () => {
+      supabase.removeChannel(activitySub);
     };
-
-    // Notification 1: Upcoming scheduled workout
-    timers.push(setTimeout(() => {
-      const title = "Upcoming Workout Reminder";
-      const message = "You have an 'Intervals' session scheduled in 15 minutes! Ready to crush it?";
-      
-      const newNotification = {
-        id: Date.now() + 1,
-        title,
-        message,
-        icon: <Calendar className="w-5 h-5 text-[#32ADE6]" />,
-        time: "Just now",
-        action: "Start Workout"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-      sendEmailNotification(title, message);
-    }, 6000));
-
-    // Notification 2: Goal progress update
-    timers.push(setTimeout(() => {
-      const title = "Weekly Goal Update";
-      const message = "You've completed 5 out of 6 workouts this week. Just one more to hit your target!";
-      
-      const newNotification = {
-        id: Date.now() + 2,
-        title,
-        message,
-        icon: <Activity className="w-5 h-5 text-[#21D4B5]" />,
-        time: "Just now"
-      };
-      setNotifications(prev => [newNotification, ...prev]);
-      sendEmailNotification(title, message);
-    }, 18000)); // Show 12 seconds after the first one
-
-    return () => timers.forEach(clearTimeout);
   }, []);
 
   const dismissNotification = (id: number) => {
@@ -135,7 +87,6 @@ export function NotificationSystem() {
 
   const handleAction = (id: number) => {
     dismissNotification(id);
-    // In a real app, this would navigate to the workout screen
   };
 
   return (

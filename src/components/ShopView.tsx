@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { ShoppingBag, Star, TrendingUp, Filter, Search, Tag, ShoppingCart, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import api from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 
 export function ShopView() {
-  const [activeCategory, setActiveCategory] = useState<"all" | "equipment" | "supplements" | "apparel">("all");
+  const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [products, setProducts] = useState<any[]>([]);
 
-  useEffect(() => {
-    api.get("/shop/products")
-      .then(res => setProducts(res.data))
-      .catch(console.error);
-  }, []);
+  const { data: products = [] } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Product').select('*');
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const filteredProducts = products.filter(p => {
     const matchesCategory = activeCategory === "all" || p.category === activeCategory;
