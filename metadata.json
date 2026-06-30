@@ -1,0 +1,11 @@
+{
+  "name": "SportHub",
+  "description": "A production-ready fitness tracking web application featuring interactive OpenStreetMap tracking, real-time social feeds via Socket.IO, and AI-powered personalized workout recommendations.",
+  "requestFramePermissions": [
+    "geolocation",
+    "bluetooth"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

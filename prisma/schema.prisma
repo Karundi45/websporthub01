@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  name                 String
+  avatar               String?
+  pushSubscription     Json?
+  createdAt            DateTime  @default(now())
+  
+  activities           Activity[]
+  workouts             Workout[]
+  groupsCreated        Group[]   @relation("GroupCreator")
+  badges               Badge[]
+  heartRateLogs        HeartRateLog[]
+
+  // Relations
+  followers            User[]    @relation("UserFollows")
+  following            User[]    @relation("UserFollows")
+  
+  savedPosts           Activity[] @relation("SavedPosts")
+
+  groupsMember         Group[]   @relation("GroupMembers")
+  challenges           Challenge[] @relation("ChallengeParticipants")
+}
+
+model Activity {
+  id           String    @id @default(uuid())
+  userId       String
+  userName     String
+  activity     String
+  metrics      String
+  time         DateTime  @default(now())
+  likes        Int       @default(0)
+  likedBy      String[]  // Array of strings (usernames or UUIDs)
+  comments     Json      // JSON array of comments
+  reactions    Json      // JSON map of reactions
+  mediaUrls    String[]  // Array of strings
+  workoutStats Json?     // Optional JSON
+  storyText    String?
+  location     Json?     // Optional JSON for location { type, coordinates }
+  
+  user         User      @relation(fields: [userId], references: [id])
+  savedBy      User[]    @relation("SavedPosts")
+}
+
+model Message {
+  id     String   @id @default(uuid())
+  user   String
+  text   String
+  time   DateTime @default(now())
+  readBy String[]
+}
+
+model Workout {
+  id           String   @id @default(uuid())
+  userId       String
+  activityType String
+  distance     Float    @default(0)
+  duration     Int      @default(0)
+  path         Json     // JSON array of { lat, lng, time }
+  startTime    DateTime
+  endTime      DateTime
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  createdById String
+  createdAt   DateTime @default(now())
+  location    Json?    // Optional JSON for { type, coordinates }
+
+  createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
+  members     User[]   @relation("GroupMembers")
+}
+
+model Challenge {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  type         String
+  targetValue  Float
+  startDate    DateTime
+  endDate      DateTime
+  
+  participants User[]   @relation("ChallengeParticipants")
+}
+
+model Product {
+  id       String @id @default(uuid())
+  name     String
+  price    Float
+  category String
+  rating   Float  @default(0)
+  image    String
+}
+
+model GymProgram {
+  id         String @id @default(uuid())
+  title      String
+  difficulty String
+  duration   String
+  workouts   Int
+  image      String
+}
+
+model Badge {
+  id         String   @id @default(uuid())
+  userId     String
+  title      String
+  icon       String
+  dateEarned DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model Establishment {
+  id       String @id @default(uuid())
+  name     String
+  type     String
+  location Json   // JSON { type: "Point", coordinates: [lng, lat] }
+}
+
+model HeartRateLog {
+  id        String   @id @default(uuid())
+  userId    String
+  bpm       Int
+  timestamp DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}

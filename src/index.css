@@ -1,0 +1,67 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+@theme {
+  --color-brand-bg: var(--bg-primary, #1A1C23);
+  --color-brand-surface: var(--bg-surface, #22252E);
+  --color-brand-surface-light: var(--bg-surface-light, #2A2D3A);
+  --color-brand-accent: var(--accent, #21D4B5); /* Cyan */
+  --color-brand-accent-dim: var(--accent-dim, rgba(33, 212, 181, 0.1));
+  --color-brand-text-primary: var(--text-primary, #FFFFFF);
+  --color-brand-text-secondary: var(--text-secondary, #8E92A4);
+  --color-brand-border: var(--border-color, #2A2D3A);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  background-color: var(--color-brand-bg);
+  color: var(--color-brand-text-primary);
+}
+
+body.daytime {
+  filter: invert(1) hue-rotate(180deg) contrast(1.1) brightness(1.1);
+}
+
+body.daytime img,
+body.daytime video,
+body.daytime .leaflet-container,
+body.daytime canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Custom scrollbar to keep layout clean */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-brand-surface-light);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-border);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom dark filter for standard map tiles */
+.map-tiles-dark {
+  filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(110%) sepia(20%) saturate(80%);
+}
+
+/* Fix for react-leaflet keeping attribution hidden on very dark maps optionally */
+.leaflet-container {
+  font-family: var(--font-sans) !important;
+}
