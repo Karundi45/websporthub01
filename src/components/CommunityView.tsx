@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Users, Search, Plus, UserPlus, MapPin, MessageCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Users, Search, Plus, UserPlus, MapPin, MessageCircle, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Link, useNavigate } from "react-router-dom";
@@ -9,6 +9,9 @@ export function CommunityView() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"friends" | "groups">("friends");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupDesc, setNewGroupDesc] = useState("");
 
   const { data: user } = useQuery({
     queryKey: ["user"],
@@ -46,8 +49,59 @@ export function CommunityView() {
     }
   });
 
-  // We could implement "Join Group" or "Create Group" logic here.
-  // For simplicity, we just list them.
+  // Realtime Subscriptions
+  useEffect(() => {
+    const channel = supabase.channel('community_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Group' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['groups'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'User' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  const createGroupMutation = useMutation({
+    mutationFn: async () => {
+      if (!user || !newGroupName.trim()) return;
+      const { data, error } = await supabase.from('Group').insert({
+        name: newGroupName,
+        description: newGroupDesc,
+        createdById: user.id
+      }).select().single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setShowCreateGroup(false);
+      setNewGroupName("");
+      setNewGroupDesc("");
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      if (data) {
+        navigate('/chat', { state: { recipientId: data.id, isGroup: true, name: data.name } });
+      }
+    }
+  });
+
+  const followMutation = useMutation({
+    mutationFn: async (targetId: string) => {
+      if (!user) return;
+      // In a real app, you would check if Friendship already exists
+      const { error } = await supabase.from('Friendship').insert({
+        user1Id: user.id,
+        user2Id: targetId
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      alert("Followed successfully!");
+    }
+  });
 
   return (
     <div className="h-full flex flex-col bg-[#12141A] overflow-y-auto">
@@ -55,7 +109,7 @@ export function CommunityView() {
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">Community</h2>
           {activeTab === "groups" && (
-            <button className="flex items-center gap-2 bg-brand-accent text-white px-4 py-2 rounded-full font-semibold">
+            <button onClick={() => setShowCreateGroup(true)} className="flex items-center gap-2 bg-brand-accent hover:bg-brand-accent-hover text-white px-4 py-2 rounded-full font-semibold transition-colors">
               <Plus className="w-4 h-4" /> Create Group
             </button>
           )}
@@ -109,7 +163,7 @@ export function CommunityView() {
                   <button onClick={() => navigate('/chat', { state: { recipientId: u.id, isGroup: false, name: u.name } })} className="p-2 rounded-full bg-[#2A2D3A] text-white hover:text-brand-accent transition-colors">
                     <MessageCircle className="w-4 h-4" />
                   </button>
-                  <button className="p-2 rounded-full bg-brand-accent text-white hover:bg-brand-accent-hover transition-colors">
+                  <button onClick={() => followMutation.mutate(u.id)} className="p-2 rounded-full bg-brand-accent text-white hover:bg-brand-accent-hover transition-colors">
                     <UserPlus className="w-4 h-4" />
                   </button>
                 </div>
@@ -139,6 +193,48 @@ export function CommunityView() {
           </div>
         )}
       </div>
+
+      {/* Create Group Modal */}
+      {showCreateGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1A1C23] rounded-3xl p-6 w-full max-w-md border border-[#2A2D3A]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white">Create New Group</h3>
+              <button onClick={() => setShowCreateGroup(false)} className="text-[#8E92A4] hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-brand-text-secondary block mb-1">Group Name</label>
+                <input 
+                  type="text" 
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  className="w-full bg-[#12141A] border border-[#2A2D3A] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-accent"
+                  placeholder="e.g. NYC Runners"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-brand-text-secondary block mb-1">Description</label>
+                <textarea 
+                  value={newGroupDesc}
+                  onChange={(e) => setNewGroupDesc(e.target.value)}
+                  className="w-full bg-[#12141A] border border-[#2A2D3A] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-accent min-h-[100px]"
+                  placeholder="What's this group about?"
+                />
+              </div>
+              <button 
+                onClick={() => createGroupMutation.mutate()}
+                disabled={createGroupMutation.isPending || !newGroupName.trim()}
+                className="w-full py-3 rounded-xl bg-brand-accent hover:bg-brand-accent-hover text-white font-bold transition-colors disabled:opacity-50 mt-4"
+              >
+                {createGroupMutation.isPending ? "Creating..." : "Create Group"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

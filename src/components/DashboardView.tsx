@@ -72,6 +72,33 @@ export function DashboardView() {
     enabled: !!user?.id
   });
 
+  // Realtime Subscriptions
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase.channel('dashboard_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'HealthMetric', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['healthMetrics'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'DailyTask', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dailyTasks'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Workout', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'PersonalBest', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['personalBests'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Goal', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['goals'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
+
   const toggleTaskMutation = useMutation({
     mutationFn: async ({ taskId, isCompleted }: { taskId: string, isCompleted: boolean }) => {
       await supabase.from('DailyTask').update({ isCompleted }).eq('id', taskId);
