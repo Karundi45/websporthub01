@@ -236,15 +236,8 @@ export function DashboardView() {
     return { name: "Peak / Anaerobic", color: "text-red-500", border: "border-red-500/20", bg: "bg-red-500/5", desc: "Maximum extreme effort zone" };
   };
 
-  const [planProgress, setPlanProgress] = useState({ completed: 0, total: 7, percentage: 0 });
-
-  useEffect(() => {
-    // Realtime progress for the Plan Banner using real data
-    if (activityData.length > 0) {
-      const activeDays = activityData.filter(d => d.workouts > 0).length;
-      setPlanProgress({ completed: activeDays, total: 7, percentage: Math.round((activeDays / 7) * 100) });
-    }
-  }, [activityData]);
+  const activeDays = activityData.filter((d: any) => d.workouts > 0).length;
+  const planProgress = { completed: activeDays, total: 7, percentage: Math.round((activeDays / 7) * 100) };
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
