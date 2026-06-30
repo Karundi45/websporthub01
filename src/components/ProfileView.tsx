@@ -5,8 +5,11 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import Webcam from 'react-webcam';
 import { supabase } from '@/lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
 
 export function ProfileView() {
+  const { id: profileId } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "badges" | "friends" | "posts" | "progress">("overview");
   const [showSettings, setShowSettings] = useState(false);
@@ -59,6 +62,20 @@ export function ProfileView() {
       if (error && error.code !== 'PGRST116') throw error; // Handle no rows gracefully later
       return { authUser: user, profile: data };
     }
+  });
+
+  const targetUserId = profileId || user?.authUser?.id;
+  const isOwnProfile = !profileId || profileId === user?.authUser?.id;
+
+  const { data: viewedProfile } = useQuery({
+    queryKey: ['userProfile', targetUserId],
+    queryFn: async () => {
+      if (!targetUserId) return null;
+      const { data, error } = await supabase.from('User').select('*').eq('id', targetUserId).single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!targetUserId
   });
 
   const { data: allUsers = [] } = useQuery({
@@ -213,10 +230,13 @@ export function ProfileView() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white tracking-tight">{profileData.name}</h2>
-              <p className="text-brand-text-secondary text-sm">@{profileData.username} • Level 24 Athlete</p>
-              <div className="flex items-center gap-1 mt-1 text-[#8E92A4] text-xs font-medium">
+              <p className="text-brand-text-secondary text-sm">@{profileData.email?.split('@')[0] || profileData.id?.substring(0, 8)}</p>
+              {profileData.bio && (
+                <p className="text-white text-sm mt-2">{profileData.bio}</p>
+              )}
+              <div className="flex items-center gap-1 mt-2 text-[#8E92A4] text-xs font-medium">
                 <MapPin className="w-3 h-3" />
-                {profileData.location}
+                {profileData.location || "Earth"}
               </div>
               <div className="flex items-center gap-4 mt-3">
                 <div className="flex flex-col cursor-pointer hover:opacity-80" onClick={() => setActiveTab("friends")}>
@@ -235,12 +255,39 @@ export function ProfileView() {
             </div>
           </div>
           <div className="flex gap-2">
-             <button onClick={() => setShowEditProfile(true)} className="w-10 h-10 rounded-full bg-[#2A2D3A] flex items-center justify-center text-white hover:bg-[#3A3D4A] transition-colors">
-               <Edit2 className="w-4 h-4" />
-             </button>
-             <button onClick={() => setShowSettings(true)} className="w-10 h-10 rounded-full bg-[#2A2D3A] flex items-center justify-center text-white hover:bg-[#3A3D4A] transition-colors">
-               <Settings className="w-4 h-4" />
-             </button>
+            {!isOwnProfile ? (
+              <>
+                <button
+                  onClick={() => {
+                     // Check if following
+                     const isFollowing = viewedProfile?.followers?.some((f: any) => f.id === user?.authUser?.id);
+                     if (isFollowing) {
+                        // Unfollow logic...
+                     } else {
+                        // Follow logic
+                     }
+                  }}
+                  className="px-6 py-2 rounded-full bg-brand-accent text-white hover:bg-brand-accent-hover font-semibold transition-colors"
+                >
+                  Follow
+                </button>
+                <button
+                  onClick={() => navigate('/chat', { state: { recipientId: targetUserId, isGroup: false, name: profileData.name } })}
+                  className="px-6 py-2 rounded-full bg-[#2A2D3A] text-white hover:bg-[#3A3D4A] font-semibold transition-colors flex items-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" /> Message
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setShowEditProfile(true)} className="w-10 h-10 rounded-full bg-[#2A2D3A] flex items-center justify-center text-white hover:bg-[#3A3D4A] transition-colors">
+                  <Edit2 className="w-4 h-4" />
+                </button>
+                <button onClick={() => setShowSettings(true)} className="w-10 h-10 rounded-full bg-[#2A2D3A] flex items-center justify-center text-white hover:bg-[#3A3D4A] transition-colors">
+                  <Settings className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
 

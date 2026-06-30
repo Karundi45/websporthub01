@@ -13,6 +13,8 @@ model User {
   email                String    @unique
   name                 String
   avatar               String?
+  bio                  String?   
+  location             String?
   pushSubscription     Json?
   createdAt            DateTime  @default(now())
   
@@ -35,6 +37,21 @@ model User {
   receivedRequests     FriendRequest[] @relation("ReceivedRequests")
   friendshipsUser1     Friendship[]    @relation("FriendshipUser1")
   friendshipsUser2     Friendship[]    @relation("FriendshipUser2")
+
+  activityLikes        ActivityLike[]
+  activityComments     ActivityComment[]
+
+  messagesSent         Message[]       @relation("MessagesSent")
+  messagesReceived     Message[]       @relation("MessagesReceived")
+
+  groupMessages        GroupMessage[]  @relation("GroupMessages")
+  groupInvitesSent     GroupInvite[]   @relation("GroupInviteSender")
+  groupInvitesReceived GroupInvite[]   @relation("GroupInviteReceiver")
+
+  goals                Goal[]
+  personalBests        PersonalBest[]
+  dailyTasks           DailyTask[]
+  healthMetrics        HealthMetric[]
 }
 
 model Activity {
@@ -55,14 +72,22 @@ model Activity {
   
   user         User      @relation(fields: [userId], references: [id])
   savedBy      User[]    @relation("SavedPosts")
+
+  activityLikes ActivityLike[]
+  activityComments ActivityComment[]
 }
 
 model Message {
-  id     String   @id @default(uuid())
-  user   String
-  text   String
-  time   DateTime @default(now())
-  readBy String[]
+  id         String   @id @default(uuid())
+  text       String
+  time       DateTime @default(now())
+  readBy     String[]
+
+  senderId   String
+  receiverId String
+  
+  sender     User     @relation("MessagesSent", fields: [senderId], references: [id])
+  receiver   User     @relation("MessagesReceived", fields: [receiverId], references: [id])
 }
 
 model Workout {
@@ -88,6 +113,9 @@ model Group {
 
   createdBy   User     @relation("GroupCreator", fields: [createdById], references: [id])
   members     User[]   @relation("GroupMembers")
+
+  groupMessages GroupMessage[]
+  groupInvites  GroupInvite[]
 }
 
 model Challenge {
@@ -178,4 +206,99 @@ model NavigationTab {
   iconName  String
   order     Int      @default(0)
   isActive  Boolean  @default(true)
+}
+
+model ActivityLike {
+  id         String   @id @default(uuid())
+  activityId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, userId])
+}
+
+model ActivityComment {
+  id         String   @id @default(uuid())
+  activityId String
+  userId     String
+  text       String
+  createdAt  DateTime @default(now())
+
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------- NEW MODELS ----------------
+
+model Goal {
+  id           String   @id @default(uuid())
+  userId       String
+  type         String   // e.g. "Hydration", "Distance", "Weight"
+  targetValue  Float
+  currentValue Float    @default(0)
+  unit         String
+  deadline     DateTime?
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PersonalBest {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String   // e.g. "5K Run Pace", "Bench Press", "Squat", "Total Distance"
+  value      Float
+  unit       String
+  date       DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyTask {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  description String?
+  isCompleted Boolean  @default(false)
+  date        DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HealthMetric {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String   // e.g. "Hydration", "Weight", "Mood"
+  value      Float
+  unit       String
+  date       DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GroupInvite {
+  id         String   @id @default(uuid())
+  groupId    String
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt  DateTime @default(now())
+
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender     User     @relation("GroupInviteSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("GroupInviteReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model GroupMessage {
+  id         String   @id @default(uuid())
+  groupId    String
+  senderId   String
+  text       String
+  time       DateTime @default(now())
+
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender     User     @relation("GroupMessages", fields: [senderId], references: [id], onDelete: Cascade)
 }

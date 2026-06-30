@@ -14,6 +14,7 @@ const MapView = lazy(() => import("./components/MapView").then(module => ({ defa
 const SocialFeedView = lazy(() => import("./components/SocialFeedView").then(module => ({ default: module.SocialFeedView })));
 const ExploreView = lazy(() => import("./components/ExploreView").then(module => ({ default: module.ExploreView })));
 const ProfileView = lazy(() => import("./components/ProfileView").then(module => ({ default: module.ProfileView })));
+const ChatView = lazy(() => import("./components/ChatView").then(module => ({ default: module.ChatView })));
 // End of imports
 
 export default function App() {
@@ -65,6 +66,8 @@ export default function App() {
               <Route path="/social" element={<SocialFeedView />} />
               <Route path="/explore" element={<ExploreView />} />
               <Route path="/profile" element={<ProfileView />} />
+              <Route path="/profile/:id" element={<ProfileView />} />
+              <Route path="/chat" element={<ChatView />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>

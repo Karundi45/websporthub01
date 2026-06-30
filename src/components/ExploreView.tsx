@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { ChallengesView } from "./ChallengesView";
+import { CommunityView } from "./CommunityView";
 import { ShopView } from "./ShopView";
 import { GymView } from "./GymView";
 import { Compass, ShoppingBag, Trophy, Dumbbell } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ExploreView() {
-  const [activeTab, setActiveTab] = useState<"challenges" | "store" | "training">("challenges");
+  const [activeTab, setActiveTab] = useState<"community" | "store" | "training">("community");
 
   return (
     <div className="h-full flex flex-col">
@@ -18,16 +18,16 @@ export function ExploreView() {
         
         <div className="flex gap-4 overflow-x-auto hide-scrollbar">
           <button
-            onClick={() => setActiveTab("challenges")}
+            onClick={() => setActiveTab("community")}
             className={cn(
               "pb-2 text-[13px] font-semibold transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap",
-              activeTab === "challenges" 
+              activeTab === "community" 
                 ? "text-brand-text-primary border-brand-accent" 
                 : "text-brand-text-secondary border-transparent hover:text-brand-text-primary"
             )}
           >
             <Trophy className="w-4 h-4" />
-            Challenges & Community
+            Friends & Community
           </button>
           <button
             onClick={() => setActiveTab("training")}
@@ -57,9 +57,7 @@ export function ExploreView() {
       </div>
 
       <div className="flex-1 overflow-hidden relative">
-        {/* We need to render the contents. But ChallengesView, ShopView, and GymView have their own headers and paddings. 
-            We adjust them or render them as they have their own scrolling. */}
-        {activeTab === "challenges" && <ChallengesView />}
+        {activeTab === "community" && <CommunityView />}
         {activeTab === "training" && <GymView />}
         {activeTab === "store" && <ShopView />}
       </div>
