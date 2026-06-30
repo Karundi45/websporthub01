@@ -170,3 +170,12 @@ model Friendship {
 
   @@unique([user1Id, user2Id])
 }
+
+model NavigationTab {
+  id        String   @id @default(uuid())
+  path      String   @unique
+  label     String
+  iconName  String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+}

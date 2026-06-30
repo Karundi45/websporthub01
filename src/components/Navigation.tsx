@@ -1,19 +1,27 @@
-import { Map, Activity, MessageSquare, Target, Compass, User, Wifi, WifiOff, RefreshCw, Check } from "lucide-react";
+import { Map, Activity, MessageSquare, Target, Compass, User, Wifi, WifiOff, RefreshCw, Check, HelpCircle } from "lucide-react";
+import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 
 export function Navigation() {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const tabs = [
-    { id: "/", label: "Home", icon: Activity },
-    { id: "/track", label: "Live Track", icon: Map },
-    { id: "/explore", label: "Explore", icon: Compass },
-    { id: "/social", label: "Community", icon: MessageSquare },
-    { id: "/profile", label: "Me", icon: User },
-  ];
+  const { data: tabs = [] } = useQuery({
+    queryKey: ["navigationTabs"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('NavigationTab')
+        .select('*')
+        .eq('isActive', true)
+        .order('order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -60,13 +68,13 @@ export function Navigation() {
         </div>
         
         <div className="flex md:flex-col w-full gap-0.5 items-center md:items-stretch overflow-x-auto md:overflow-visible pb-1 md:pb-0 hide-scrollbar">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = currentPath === tab.id;
+          {tabs.map((tab: any) => {
+            const Icon = (Icons as any)[tab.iconName] || HelpCircle;
+            const isActive = currentPath === tab.path;
             return (
               <Link
-                key={tab.id}
-                to={tab.id}
+                key={tab.path}
+                to={tab.path}
                 className={cn(
                   "flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 px-3 md:px-3 rounded-md transition-colors min-w-[64px] md:min-w-0 md:w-full flex-shrink-0 text-left relative",
                   "h-14 md:h-auto md:py-2",
