@@ -2,11 +2,12 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase'; // We will generate this later
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ccslfismecxlvddqfxet.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 if (!supabaseAnonKey) {
-  console.warn('VITE_SUPABASE_ANON_KEY is missing. Supabase will not function correctly on the frontend.');
+  console.warn('VITE_SUPABASE_ANON_KEY or PUBLISHABLE_KEY is missing. Supabase will not function correctly on the frontend.');
 }
 
 // Create a single supabase client for interacting with your database
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey || '');
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey || 'dummy_key_to_prevent_crash');
+
