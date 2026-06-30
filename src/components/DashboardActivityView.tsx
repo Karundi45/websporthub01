@@ -1,20 +1,31 @@
 import { useEffect, useState } from "react";
 import { Pen, Flame, Footprints, Moon, Droplets } from "lucide-react";
-import api from "@/lib/api";
 import { format, startOfWeek, endOfWeek, subWeeks, isSameDay, getDay, getDate } from "date-fns";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 
 export function DashboardActivityView() {
-  const [workouts, setWorkouts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: user } = useQuery({
+    queryKey: ["user"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
+    },
+  });
 
-  useEffect(() => {
-    api.get('/workouts')
-      .then(res => {
-        setWorkouts(res.data);
-      })
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: workouts = [], isLoading: loading } = useQuery({
+    queryKey: ['workouts', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('Workout')
+        .select('*')
+        .eq('userId', user.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id
+  });
 
   // Process data for the current week
   const today = new Date();

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Dumbbell, Play, Timer as TimerIcon, Plus, HeartPulse, Video, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import api from "@/lib/api";
+import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
 
 export function GymView() {
   const [activePlan, setActivePlan] = useState<string | null>(null);
@@ -11,14 +12,16 @@ export function GymView() {
     { role: 'coach', text: 'Hi! I am your AI Coach. What are your fitness goals for today? I can generate a custom workout plan for you.' }
   ]);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [workouts, setWorkouts] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    api.get("/gym/programs")
-      .then(res => setWorkouts(res.data))
-      .catch(console.error);
-  }, []);
+  const { data: workouts = [] } = useQuery({
+    queryKey: ['gymPrograms'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('GymProgram').select('*');
+      if (error) throw error;
+      return data || [];
+    }
+  });
 
   const handleSendAiMessage = async (e: React.FormEvent) => {
     e.preventDefault();

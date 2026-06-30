@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Edit2, Settings, MapPin, Grid, List, Activity, Medal, Users, UserPlus, MessageCircle, ChevronRight, CheckCircle2, TrendingUp, Calendar, Heart, Share2, Award, Flame, BarChart3, Trophy } from 'lucide-react';
+import { Camera, Edit2, Settings, MapPin, Grid, List, Activity, Medal, Users, UserPlus, MessageCircle, ChevronRight, CheckCircle2, TrendingUp, Calendar, Heart, Share2, Award, Flame, BarChart3, Trophy, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Webcam from 'react-webcam';
-import api from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export function ProfileView() {
-  const [activeTab, setActiveTab] = useState<"overview" | "history" | "badges" | "friends">("overview");
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"overview" | "history" | "badges" | "friends" | "posts" | "progress">("overview");
   const [showSettings, setShowSettings] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  
-  const [posts, setPosts] = useState<any[]>([]);
-  const [workouts, setWorkouts] = useState<any[]>([]);
 
   const [newPostText, setNewPostText] = useState("");
   const [newPostLocation, setNewPostLocation] = useState("");
@@ -26,17 +25,6 @@ export function ProfileView() {
 
   const [editingPostId, setEditingPostId] = useState<number | null>(null);
   const [editingPostText, setEditingPostText] = useState("");
-
-  const [profileData, setProfileData] = useState({
-    name: localStorage.getItem("social_profile_name") || "Sarah Jenkins",
-    username: "sarah_j",
-    location: "Los Angeles, CA",
-    bio: localStorage.getItem("social_profile_bio") || "Marathon runner and fitness enthusiast.",
-    email: "sarah@example.com",
-    notifications: true,
-    privateProfile: false,
-    profilePic: localStorage.getItem("social_profile_pic") || "https://i.pravatar.cc/150?u=sarah"
-  });
 
   const [progressPhotos, setProgressPhotos] = useState<{id: string, uri: string, date: string, weight?: string}[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -61,63 +49,83 @@ export function ProfileView() {
   });
   const [showEditGoals, setShowEditGoals] = useState(false);
 
-  const [weeklyData, setWeeklyData] = useState<any[]>([]);
-  const [stats, setStats] = useState({ followers: 0, following: 0, activities: 0 });
-  const [badges, setBadges] = useState<any[]>([]);
+  // Queries
+  const { data: user } = useQuery({
+    queryKey: ['user'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not logged in");
+      const { data, error } = await supabase.from('User').select('*').eq('id', user.id).single();
+      if (error && error.code !== 'PGRST116') throw error; // Handle no rows gracefully later
+      return { authUser: user, profile: data };
+    }
+  });
 
-  useEffect(() => {
-    // Fetch profile data
-    const loadProfileData = async () => {
-      try {
-        const [analyticsRes, badgesRes, galleryRes] = await Promise.all([
-          api.get('/user/analytics'),
-          api.get('/user/badges'),
-          api.get('/user/gallery')
-        ]);
-        
-        // Transform workouts into weekly data for chart
-        const dayMap: Record<string, any> = {
-          'Mon': { day: 'Mon', calories: 0, activeMin: 0 },
-          'Tue': { day: 'Tue', calories: 0, activeMin: 0 },
-          'Wed': { day: 'Wed', calories: 0, activeMin: 0 },
-          'Thu': { day: 'Thu', calories: 0, activeMin: 0 },
-          'Fri': { day: 'Fri', calories: 0, activeMin: 0 },
-          'Sat': { day: 'Sat', calories: 0, activeMin: 0 },
-          'Sun': { day: 'Sun', calories: 0, activeMin: 0 },
-        };
-        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
-        const fetchedWorkouts = analyticsRes.data.workouts || [];
-        fetchedWorkouts.forEach((w: any) => {
-          const dName = dayNames[new Date(w.startTime).getDay()];
-          dayMap[dName].activeMin += (w.duration / 60);
-          dayMap[dName].calories += (w.distance / 1000) * 70; // rough estimate
-        });
-        setWeeklyData(Object.values(dayMap));
-        setStats(prev => ({ ...prev, activities: analyticsRes.data.totalWorkouts }));
-        setWorkouts(fetchedWorkouts);
-        
-        setBadges(badgesRes.data);
-        
-        const enhancedPosts = galleryRes.data.map((a: any) => ({
-          id: a._id,
-          text: a.caption || a.activity,
-          date: new Date(a.time).toLocaleString(),
-          likes: a.likes || 0,
-          location: "Location",
-          tags: a.tags || [],
-          mentions: [],
-          workoutData: { type: a.activity, duration: "", distance: "", calories: 0 },
-          picture: a.imageUri || (a.mediaUrls && a.mediaUrls.length > 0 ? a.mediaUrls[0] : null)
-        }));
-        setPosts(enhancedPosts);
-      } catch (err) {
-        console.error(err);
+  const { data: workouts = [] } = useQuery({
+    queryKey: ['workouts', user?.authUser?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Workout').select('*').eq('userId', user!.authUser.id).order('startTime', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.authUser?.id
+  });
+
+  const { data: posts = [] } = useQuery({
+    queryKey: ['posts', user?.authUser?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Activity').select('*, likes:ActivityLike(count), comments:ActivityComment(count)').eq('userId', user!.authUser.id).order('time', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.authUser?.id
+  });
+
+  const { data: badges = [] } = useQuery({
+    queryKey: ['badges', user?.authUser?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('Badge').select('*').eq('userId', user!.authUser.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.authUser?.id
+  });
+
+  const profileData = {
+    name: user?.profile?.name || user?.authUser?.user_metadata?.full_name || "New Athlete",
+    username: user?.profile?.email?.split('@')[0] || "athlete",
+    location: "Unknown Location",
+    bio: "Ready to crush goals.",
+    email: user?.authUser?.email || "",
+    notifications: true,
+    privateProfile: false,
+    profilePic: user?.profile?.avatar || user?.authUser?.user_metadata?.avatar_url || "https://i.pravatar.cc/150?u=" + (user?.authUser?.id || "default")
+  };
+
+  // Transform workouts into weekly data for chart
+  const dayMap: Record<string, any> = {
+    'Mon': { day: 'Mon', calories: 0, activeMin: 0 },
+    'Tue': { day: 'Tue', calories: 0, activeMin: 0 },
+    'Wed': { day: 'Wed', calories: 0, activeMin: 0 },
+    'Thu': { day: 'Thu', calories: 0, activeMin: 0 },
+    'Fri': { day: 'Fri', calories: 0, activeMin: 0 },
+    'Sat': { day: 'Sat', calories: 0, activeMin: 0 },
+    'Sun': { day: 'Sun', calories: 0, activeMin: 0 },
+  };
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  workouts.forEach((w: any) => {
+    const date = new Date(w.startTime);
+    if (!isNaN(date.getTime())) {
+      const dName = dayNames[date.getDay()];
+      if (dayMap[dName]) {
+        dayMap[dName].activeMin += (w.duration / 60) || 0;
+        dayMap[dName].calories += ((w.distance / 1000) * 70) || 0;
       }
-    };
-    
-    loadProfileData();
-  }, []);
+    }
+  });
+  const weeklyData = Object.values(dayMap);
+  const stats = { followers: 0, following: 0, activities: workouts.length };
 
   return (
     <div className="h-full flex flex-col bg-[#1A1C23] overflow-y-auto pb-24 md:pb-10">

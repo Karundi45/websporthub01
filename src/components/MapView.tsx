@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { LineChart, Line, YAxis, ResponsiveContainer } from "recharts";
 import Webcam from "react-webcam";
 import { SpotifyPlayer } from "./SpotifyPlayer";
-import api from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 
 // Fix for default marker icons in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -104,16 +104,21 @@ export function MapView() {
 
   const handleSaveActivity = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not logged in");
+
       const payload = {
+        userId: user.id,
         activityType,
         distance,
         duration: elapsedSeconds,
         path: route.map(p => ({ lat: p[0], lng: p[1], time: new Date() })),
-        startTime: new Date(startTimeRef.current || Date.now()),
-        endTime: new Date()
+        startTime: new Date(startTimeRef.current || Date.now()).toISOString(),
+        endTime: new Date().toISOString()
       };
       
-      await api.post('/workouts', payload);
+      const { error } = await supabase.from('Workout').insert(payload);
+      if (error) throw error;
       
       setRoute([]);
       setDistance(0);
@@ -121,7 +126,7 @@ export function MapView() {
       setHasRecordedRoute(false);
       alert('Activity Route Saved successfully!');
     } catch (err: any) {
-      alert('Failed to save workout: ' + (err.response?.data?.error || err.message));
+      alert('Failed to save workout: ' + (err.message));
     }
   };
 
