@@ -39,28 +39,64 @@ export function DashboardView() {
     enabled: !!user?.id
   });
 
+  const { data: heartRateLogs = [] } = useQuery({
+    queryKey: ['heartRateLogs', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('HeartRateLog')
+        .select('*')
+        .eq('userId', user.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.id
+  });
+
   const { data: activityData, totalDistance } = (() => {
     const dayMap: Record<string, any> = {
-      'Mon': { day: 'Mon', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Tue': { day: 'Tue', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Wed': { day: 'Wed', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Thu': { day: 'Thu', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Fri': { day: 'Fri', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Sat': { day: 'Sat', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
-      'Sun': { day: 'Sun', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0 },
+      'Mon': { day: 'Mon', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Tue': { day: 'Tue', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Wed': { day: 'Wed', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Thu': { day: 'Thu', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Fri': { day: 'Fri', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Sat': { day: 'Sat', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
+      'Sun': { day: 'Sun', calories: 0, distance: 0, minutes: 0, workouts: 0, intensity: 0, hrCount: 0 },
     };
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
     let totalDistance = 0;
     workouts.forEach((w: any) => {
-      const dName = dayNames[new Date(w.startTime).getDay()];
-      dayMap[dName].distance += (w.distance / 1000) || 0; // convert meters to km
-      dayMap[dName].minutes += (w.duration / 60) || 0;
-      dayMap[dName].calories += ((w.distance / 1000) * 70) || 0; // 70 kcal per km estimate
-      dayMap[dName].workouts += 1;
-      dayMap[dName].intensity = 130 + Math.floor(Math.random() * 20); // random intensity for chart
-      totalDistance += (w.distance / 1000) || 0;
+      if (w.startTime) {
+        const dName = dayNames[new Date(w.startTime).getDay()];
+        if (dayMap[dName]) {
+          dayMap[dName].distance += (w.distance / 1000) || 0; // convert meters to km
+          dayMap[dName].minutes += (w.duration / 60) || 0;
+          dayMap[dName].calories += ((w.distance / 1000) * 70) || 0; // 70 kcal per km estimate
+          dayMap[dName].workouts += 1;
+        }
+        totalDistance += (w.distance / 1000) || 0;
+      }
     });
+
+    heartRateLogs.forEach((hr: any) => {
+      if (hr.timestamp) {
+        const dName = dayNames[new Date(hr.timestamp).getDay()];
+        if (dayMap[dName]) {
+          dayMap[dName].intensity += hr.bpm;
+          dayMap[dName].hrCount += 1;
+        }
+      }
+    });
+
+    Object.values(dayMap).forEach((d: any) => {
+      if (d.hrCount > 0) {
+        d.intensity = Math.round(d.intensity / d.hrCount);
+      } else {
+        d.intensity = 0;
+      }
+    });
+
     return { data: Object.values(dayMap), totalDistance };
   })();
 

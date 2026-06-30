@@ -32,9 +32,12 @@ export function NotificationSystem() {
       const permission = await Notification.requestPermission();
       setPushPermission(permission);
       if (permission === 'granted') {
-        const registration = await navigator.serviceWorker.ready;
-        const response = await fetch('/api/notifications/vapid-public-key');
-        const vapidPublicKey = await response.text();
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        
+        // Mock VAPID key for frontend demo purposes since we don't have real keys loaded yet
+        // In a real app, you fetch the public VAPID key from your server/edge function
+        const vapidPublicKey = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLcg05SR1XjM';
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
 
         const subscription = await registration.pushManager.subscribe({
@@ -42,7 +45,10 @@ export function NotificationSystem() {
           applicationServerKey: convertedVapidKey
         });
         
-        await api.post('/notifications/subscribe', subscription);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('User').update({ pushSubscription: JSON.parse(JSON.stringify(subscription)) }).eq('id', user.id);
+        }
         
         // Show success notification
         setNotifications(prev => [{

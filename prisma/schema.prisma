@@ -30,6 +30,11 @@ model User {
 
   groupsMember         Group[]   @relation("GroupMembers")
   challenges           Challenge[] @relation("ChallengeParticipants")
+
+  sentRequests         FriendRequest[] @relation("SentRequests")
+  receivedRequests     FriendRequest[] @relation("ReceivedRequests")
+  friendshipsUser1     Friendship[]    @relation("FriendshipUser1")
+  friendshipsUser2     Friendship[]    @relation("FriendshipUser2")
 }
 
 model Activity {
@@ -139,4 +144,29 @@ model HeartRateLog {
   timestamp DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model FriendRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentRequests", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id])
+
+  @@unique([senderId, receiverId])
+}
+
+model Friendship {
+  id         String   @id @default(uuid())
+  user1Id    String
+  user2Id    String
+  createdAt  DateTime @default(now())
+
+  user1      User     @relation("FriendshipUser1", fields: [user1Id], references: [id])
+  user2      User     @relation("FriendshipUser2", fields: [user2Id], references: [id])
+
+  @@unique([user1Id, user2Id])
 }

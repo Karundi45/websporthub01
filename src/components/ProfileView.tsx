@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Edit2, Settings, MapPin, Grid, List, Activity, Medal, Users, UserPlus, MessageCircle, ChevronRight, CheckCircle2, TrendingUp, Calendar, Heart, Share2, Award, Flame, BarChart3, Trophy, Clock } from 'lucide-react';
+import { Camera, Edit2, Settings, MapPin, Grid, List, Activity, Medal, Users, UserPlus, MessageCircle, ChevronRight, CheckCircle2, TrendingUp, Calendar, Heart, Share2, Award, Flame, BarChart3, Trophy, Clock, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Webcam from 'react-webcam';
@@ -58,6 +58,75 @@ export function ProfileView() {
       const { data, error } = await supabase.from('User').select('*').eq('id', user.id).single();
       if (error && error.code !== 'PGRST116') throw error; // Handle no rows gracefully later
       return { authUser: user, profile: data };
+    }
+  });
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['allUsers'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('User').select('id, name, avatar');
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const { data: friendRequests = [] } = useQuery({
+    queryKey: ['friendRequests'],
+    queryFn: async () => {
+      if (!user?.authUser) return [];
+      const { data, error } = await supabase.from('FriendRequest')
+        .select('*, sender:senderId(name, avatar), receiver:receiverId(name, avatar)')
+        .or(`senderId.eq.${user.authUser.id},receiverId.eq.${user.authUser.id}`);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.authUser
+  });
+
+  const { data: friendships = [] } = useQuery({
+    queryKey: ['friendships'],
+    queryFn: async () => {
+      if (!user?.authUser) return [];
+      const { data, error } = await supabase.from('Friendship')
+        .select('*, user1:user1Id(name, avatar), user2:user2Id(name, avatar)')
+        .or(`user1Id.eq.${user.authUser.id},user2Id.eq.${user.authUser.id}`);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.authUser
+  });
+
+  const sendFriendRequest = useMutation({
+    mutationFn: async (receiverId: string) => {
+      if (!user?.authUser) throw new Error("Not logged in");
+      const { error } = await supabase.from('FriendRequest').insert({
+        senderId: user.authUser.id,
+        receiverId
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+    }
+  });
+
+  const updateFriendRequest = useMutation({
+    mutationFn: async ({ requestId, status, senderId }: { requestId: string, status: string, senderId: string }) => {
+      if (!user?.authUser) throw new Error("Not logged in");
+      const { error } = await supabase.from('FriendRequest').update({ status }).eq('id', requestId);
+      if (error) throw error;
+
+      if (status === 'ACCEPTED') {
+        const { error: friendErr } = await supabase.from('Friendship').insert({
+          user1Id: senderId,
+          user2Id: user.authUser.id
+        });
+        if (friendErr) throw friendErr;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['friendships'] });
     }
   });
 
@@ -455,61 +524,97 @@ export function ProfileView() {
         {activeTab === "friends" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">Friends & Following</h3>
-              <div className="relative">
-                <Search className="w-4 h-4 text-[#8E92A4] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input 
-                  type="text" 
-                  placeholder="Find athletes..." 
-                  className="bg-[#22252E] border border-[#2A2D3A] rounded-full pl-9 pr-4 py-1.5 text-sm text-white focus:outline-none focus:border-[#21D4B5] w-full max-w-[200px]"
-                />
-              </div>
+              <h3 className="text-lg font-bold text-white">Friends & Network</h3>
             </div>
 
+            {/* Pending Requests */}
+            {friendRequests.filter((r: any) => r.receiverId === user?.authUser?.id && r.status === 'PENDING').length > 0 && (
+              <>
+                <h3 className="text-md font-bold text-white mb-2">Pending Requests</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {friendRequests.filter((r: any) => r.receiverId === user?.authUser?.id && r.status === 'PENDING').map((req: any) => (
+                    <div key={req.id} className="bg-[#22252E] border border-[#2A2D3A]/50 rounded-[20px] p-4 flex items-center justify-between group">
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-full bg-[#1A1C23] overflow-hidden">
+                           <img src={req.sender?.avatar || "https://i.pravatar.cc/150"} alt={req.sender?.name} className="w-full h-full object-cover" />
+                         </div>
+                         <div>
+                           <h4 className="text-white font-bold text-base leading-tight">{req.sender?.name || 'Unknown User'}</h4>
+                           <p className="text-[#8E92A4] text-xs">Wants to be friends</p>
+                         </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => updateFriendRequest.mutate({ requestId: req.id, status: 'ACCEPTED', senderId: req.senderId })} className="p-2 rounded-full bg-[#21D4B5] text-[#1A1C23] hover:opacity-80 transition-opacity">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => updateFriendRequest.mutate({ requestId: req.id, status: 'REJECTED', senderId: req.senderId })} className="p-2 rounded-full bg-[#2A2D3A] text-white hover:bg-red-500/20 hover:text-red-500 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* My Friends */}
+            <h3 className="text-md font-bold text-white mb-2">My Friends</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { name: "Alex Chen", handle: "@alex_runs", role: "Triathlete", mutual: 12, img: "https://i.pravatar.cc/150?u=alex" },
-                { name: "Marcus Johnson", handle: "@marcus_lifts", role: "Powerlifter", mutual: 5, img: "https://i.pravatar.cc/150?u=marcus" },
-                { name: "Elena Rodriguez", handle: "@elena_yoga", role: "Yoga Instructor", mutual: 24, img: "https://i.pravatar.cc/150?u=elena" },
-                { name: "David Kim", handle: "@dk_sprints", role: "Sprinter", mutual: 8, img: "https://i.pravatar.cc/150?u=david" },
-              ].map((friend, i) => (
-                <div key={i} className="bg-[#22252E] border border-[#2A2D3A]/50 rounded-[20px] p-4 flex items-center justify-between group hover:bg-[#2A2D3A]/20 transition-colors">
-                  <div className="flex items-center gap-4">
-                     <div className="w-12 h-12 rounded-full bg-[#1A1C23] overflow-hidden">
-                       <img src={friend.img} alt={friend.name} className="w-full h-full object-cover" />
-                     </div>
-                     <div>
-                       <h4 className="text-white font-bold text-base leading-tight">{friend.name}</h4>
-                       <p className="text-[#8E92A4] text-xs">{friend.handle} • {friend.role}</p>
-                       <p className="text-[#8E92A4] text-[10px] mt-0.5">{friend.mutual} mutual friends</p>
-                     </div>
-                  </div>
-                  <button className="p-2 rounded-full bg-[#2A2D3A] text-white hover:bg-[#21D4B5] hover:text-[#1A1C23] transition-colors">
-                    <UserPlus className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+              {friendships.length === 0 ? (
+                <p className="text-[#8E92A4] text-sm">No friends yet. Start adding people below!</p>
+              ) : (
+                friendships.map((f: any) => {
+                  const friendInfo = f.user1Id === user?.authUser?.id ? f.user2 : f.user1;
+                  return (
+                    <div key={f.id} className="bg-[#22252E] border border-[#2A2D3A]/50 rounded-[20px] p-4 flex items-center justify-between group hover:bg-[#2A2D3A]/20 transition-colors">
+                      <div className="flex items-center gap-4">
+                         <div className="w-12 h-12 rounded-full bg-[#1A1C23] overflow-hidden">
+                           <img src={friendInfo?.avatar || "https://i.pravatar.cc/150"} alt={friendInfo?.name} className="w-full h-full object-cover" />
+                         </div>
+                         <div>
+                           <h4 className="text-white font-bold text-base leading-tight">{friendInfo?.name || 'Unknown'}</h4>
+                           <p className="text-[#8E92A4] text-xs">Active Athlete</p>
+                         </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            <h3 className="text-lg font-bold text-white mt-8 mb-4">Suggested to Follow</h3>
+            <h3 className="text-lg font-bold text-white mt-8 mb-4">Discover Athletes</h3>
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                { name: "Emma Wilson", handle: "@emma_fit", img: "https://i.pravatar.cc/150?u=emma" },
-                { name: "Jake Peralta", handle: "@jake_spins", img: "https://i.pravatar.cc/150?u=jake" },
-                { name: "Sophia Lee", handle: "@sophia_swims", img: "https://i.pravatar.cc/150?u=sophia" },
-              ].map((user, i) => (
-                <div key={i} className="bg-[#22252E] border border-[#2A2D3A]/50 rounded-[20px] p-5 flex flex-col items-center text-center group hover:bg-[#2A2D3A]/20 transition-colors">
-                  <div className="w-16 h-16 rounded-full bg-[#1A1C23] overflow-hidden mb-3">
-                    <img src={user.img} alt={user.name} className="w-full h-full object-cover" />
-                  </div>
-                  <h4 className="text-white font-bold text-sm leading-tight">{user.name}</h4>
-                  <p className="text-[#8E92A4] text-xs mb-3">{user.handle}</p>
-                  <button className="w-full py-2 rounded-full bg-[#2A2D3A] text-white text-xs font-bold hover:bg-[#21D4B5] hover:text-[#1A1C23] transition-colors">
-                    Follow
-                  </button>
-                </div>
-              ))}
-             </div>
+              {allUsers
+                .filter((u: any) => u.id !== user?.authUser?.id)
+                .filter((u: any) => !friendships.find((f: any) => f.user1Id === u.id || f.user2Id === u.id))
+                .map((u: any) => {
+                  const pendingReq = friendRequests.find((r: any) => (r.receiverId === u.id || r.senderId === u.id) && r.status === 'PENDING');
+                  return (
+                    <div key={u.id} className="bg-[#22252E] border border-[#2A2D3A]/50 rounded-2xl p-4 flex flex-col items-center text-center">
+                      <div className="w-16 h-16 rounded-full bg-[#1A1C23] overflow-hidden mb-3">
+                        <img src={u.avatar || "https://i.pravatar.cc/150"} alt={u.name} className="w-full h-full object-cover" />
+                      </div>
+                      <h4 className="text-white font-bold text-sm mb-1">{u.name}</h4>
+                      <button 
+                        onClick={() => {
+                          if (!pendingReq) {
+                            sendFriendRequest.mutate(u.id);
+                          }
+                        }}
+                        disabled={!!pendingReq || sendFriendRequest.isPending}
+                        className="mt-3 px-4 py-1.5 rounded-full bg-[#2A2D3A] text-white text-xs font-semibold hover:bg-[#21D4B5] hover:text-[#1A1C23] transition-colors w-full flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {pendingReq ? (pendingReq.senderId === user?.authUser?.id ? 'Request Sent' : 'Respond') : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            Add Friend
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         )}
 
