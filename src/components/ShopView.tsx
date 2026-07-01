@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { ShoppingBag, Star, TrendingUp, Filter, Search, Tag, ShoppingCart, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function ShopView() {
+  const queryClient = useQueryClient();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -16,6 +17,19 @@ export function ShopView() {
       return data || [];
     }
   });
+
+  // Realtime Subscriptions
+  useEffect(() => {
+    const channel = supabase.channel('shop_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Product' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['products'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const filteredProducts = products.filter(p => {
     const matchesCategory = activeCategory === "all" || p.category === activeCategory;

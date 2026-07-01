@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { Pen, Flame, Footprints, Moon, Droplets } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks, isSameDay, getDay, getDate } from "date-fns";
 import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function DashboardActivityView() {
+  const queryClient = useQueryClient();
   const { data: user } = useQuery({
     queryKey: ["user"],
     queryFn: async () => {
@@ -26,6 +27,21 @@ export function DashboardActivityView() {
     },
     enabled: !!user?.id
   });
+
+  // Realtime Subscriptions
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase.channel('dashboard_activity_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Workout', filter: `userId=eq.${user.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
 
   // Process data for the current week
   const today = new Date();

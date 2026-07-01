@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Trophy, TrendingUp, Medal, Footprints, Users, Plus, Share2, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface Leader {
   id: string;
@@ -22,6 +22,7 @@ interface PrivateGroup {
 }
 
 export function ChallengesView() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"challenges" | "leaderboard" | "groups">("challenges");
   const [newRecord, setNewRecord] = useState<string | null>(null);
   
@@ -62,6 +63,25 @@ export function ChallengesView() {
       return data;
     }
   });
+
+  // Realtime Subscriptions
+  useEffect(() => {
+    const channel = supabase.channel('challenges_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Challenge' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Group' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['groups'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'User' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;

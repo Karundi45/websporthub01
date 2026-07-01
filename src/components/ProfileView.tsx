@@ -177,6 +177,37 @@ export function ProfileView() {
     enabled: !!user?.authUser?.id
   });
 
+  // Realtime Subscriptions
+  useEffect(() => {
+    if (!user?.authUser?.id) return;
+    const channel = supabase.channel('profile_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'User' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['user'] });
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] });
+        queryClient.invalidateQueries({ queryKey: ['allUsers'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'FriendRequest' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['friendRequests'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Friendship' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['friendships'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Workout', filter: `userId=eq.${user.authUser.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['workouts'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Activity', filter: `userId=eq.${user.authUser.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['posts'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Badge', filter: `userId=eq.${user.authUser.id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['badges'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.authUser?.id, queryClient]);
+
   const profileData = {
     name: user?.profile?.name || user?.authUser?.user_metadata?.full_name || "New Athlete",
     username: user?.profile?.email?.split('@')[0] || "athlete",

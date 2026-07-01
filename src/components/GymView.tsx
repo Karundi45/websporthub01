@@ -2,9 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import { Dumbbell, Play, Timer as TimerIcon, Plus, HeartPulse, Video, Bot, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function GymView() {
+  const queryClient = useQueryClient();
   const [activePlan, setActivePlan] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"workouts" | "recovery" | "custom" | "ai">("workouts");
   const [aiMessage, setAiMessage] = useState("");
@@ -19,9 +20,23 @@ export function GymView() {
     queryFn: async () => {
       const { data, error } = await supabase.from('GymProgram').select('*');
       if (error) throw error;
+      if (error) throw error;
       return data || [];
     }
   });
+
+  // Realtime Subscriptions
+  useEffect(() => {
+    const channel = supabase.channel('gym_programs_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'GymProgram' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['gymPrograms'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 
   const handleSendAiMessage = async (e: React.FormEvent) => {
     e.preventDefault();
